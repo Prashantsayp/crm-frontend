@@ -29,10 +29,18 @@ interface UserProfile {
   };
 }
 
+const getInitials = (firstName?: string, lastName?: string) => {
+  const f = firstName?.trim() ? firstName.trim()[0] : "";
+  const l = lastName?.trim() ? lastName.trim()[0] : "";
+  if (f || l) return `${f}${l}`.toUpperCase();
+  return "U";
+};
+
 export default function UserMetaCard() {
   const { isOpen, openModal, closeModal } = useModal();
 
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   const [user, setUser] = useState<UserProfile | null>(null);
 
@@ -53,10 +61,10 @@ export default function UserMetaCard() {
         setUser(profile);
 
         setForm({
-          firstName: profile.firstName,
-          lastName: profile.lastName,
-          email: profile.email,
-          phone: profile.phone,
+          firstName: profile.firstName || "",
+          lastName: profile.lastName || "",
+          email: profile.email || "",
+          phone: profile.phone || "",
         });
       } catch (error) {
         console.error("Profile Error :", error);
@@ -67,6 +75,18 @@ export default function UserMetaCard() {
 
     loadProfile();
   }, []);
+
+  const handleOpenModal = () => {
+    if (user) {
+      setForm({
+        firstName: user.firstName || "",
+        lastName: user.lastName || "",
+        email: user.email || "",
+        phone: user.phone || "",
+      });
+    }
+    openModal();
+  };
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement>
@@ -79,19 +99,28 @@ export default function UserMetaCard() {
 
   const handleSave = async () => {
     try {
-      /*
-      await api.patch("/auth/profile", form);
+      setSaving(true);
+      let res;
+      try {
+        res = await api.patch("/auth/profile", form);
+      } catch (err) {
+        res = await api.put("/auth/profile", form);
+      }
 
-      const res = await api.get("/auth/profile");
+      const profile = res.data.data ?? res.data;
 
-      setUser(res.data.data ?? res.data);
-      */
+      setUser((prev) => (prev ? { ...prev, ...profile, ...form } : profile));
 
-      console.log(form);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("user", JSON.stringify({ ...user, ...profile, ...form }));
+        window.dispatchEvent(new Event("storage"));
+      }
 
       closeModal();
     } catch (error) {
-      console.error(error);
+      console.error("Save Profile Error:", error);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -119,18 +148,20 @@ export default function UserMetaCard() {
 
           <div className="flex items-center gap-5">
 
-            <Image
-              src={
-                user.profileImage
-                  ? user.profileImage
-                  : "/images/user/owner.jpg"
-              }
-              alt="Profile"
-              width={90}
-              height={90}
-              className="rounded-full border"
-              unoptimized
-            />
+            {user.profileImage && user.profileImage !== "#" && user.profileImage !== "/images/user/owner.jpg" ? (
+              <Image
+                src={user.profileImage}
+                alt="Profile"
+                width={90}
+                height={90}
+                className="rounded-full border object-cover"
+                unoptimized
+              />
+            ) : (
+              <div className="flex h-[90px] w-[90px] shrink-0 items-center justify-center rounded-full bg-brand-500 text-3xl font-bold text-white shadow-md border border-brand-600 dark:bg-brand-500">
+                {getInitials(user.firstName, user.lastName)}
+              </div>
+            )}
 
             <div>
 
@@ -169,11 +200,10 @@ export default function UserMetaCard() {
                   Status :
 
                   <span
-                    className={`ml-2 font-semibold ${
-                      user.isActive
-                        ? "text-green-600"
-                        : "text-red-500"
-                    }`}
+                    className={`ml-2 font-semibold ${user.isActive
+                      ? "text-green-600"
+                      : "text-red-500"
+                      }`}
                   >
                     {user.isActive ? "Active" : "Inactive"}
                   </span>
@@ -196,7 +226,7 @@ export default function UserMetaCard() {
           </div>
 
           <button
-            onClick={openModal}
+            onClick={handleOpenModal}
             className="flex items-center justify-center gap-2 rounded-full border border-gray-300 bg-white px-5 py-3 text-sm font-medium hover:bg-gray-100 dark:bg-gray-800"
           >
             Edit Profile
@@ -204,7 +234,7 @@ export default function UserMetaCard() {
 
         </div>
       </div>
-            <Modal
+      <Modal
         isOpen={isOpen}
         onClose={closeModal}
         className="max-w-[700px] m-4"
@@ -311,6 +341,7 @@ export default function UserMetaCard() {
               variant="outline"
               size="sm"
               onClick={closeModal}
+              disabled={saving}
             >
               Cancel
             </Button>
@@ -318,8 +349,9 @@ export default function UserMetaCard() {
             <Button
               size="sm"
               onClick={handleSave}
+              disabled={saving}
             >
-              Save Changes
+              {saving ? "Saving..." : "Save Changes"}
             </Button>
 
           </div>
