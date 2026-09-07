@@ -31,6 +31,7 @@ export default function UserInfoCard() {
   const { isOpen, openModal, closeModal } = useModal();
 
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   const [user, setUser] = useState<UserProfile | null>(null);
 
@@ -51,10 +52,10 @@ export default function UserInfoCard() {
         setUser(profile);
 
         setForm({
-          firstName: profile.firstName,
-          lastName: profile.lastName,
-          email: profile.email,
-          phone: profile.phone,
+          firstName: profile.firstName || "",
+          lastName: profile.lastName || "",
+          email: profile.email || "",
+          phone: profile.phone || "",
         });
       } catch (error) {
         console.error("Profile Error :", error);
@@ -65,6 +66,18 @@ export default function UserInfoCard() {
 
     loadProfile();
   }, []);
+
+  const handleOpenModal = () => {
+    if (user) {
+      setForm({
+        firstName: user.firstName || "",
+        lastName: user.lastName || "",
+        email: user.email || "",
+        phone: user.phone || "",
+      });
+    }
+    openModal();
+  };
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement>
@@ -77,19 +90,28 @@ export default function UserInfoCard() {
 
   const handleSave = async () => {
     try {
-      /*
-      await api.patch("/auth/profile", form);
+      setSaving(true);
+      let res;
+      try {
+        res = await api.patch("/auth/profile", form);
+      } catch (err) {
+        res = await api.put("/auth/profile", form);
+      }
 
-      const res = await api.get("/auth/profile");
+      const profile = res.data.data ?? res.data;
 
-      setUser(res.data.data ?? res.data);
-      */
+      setUser((prev) => (prev ? { ...prev, ...profile, ...form } : profile));
 
-      console.log(form);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("user", JSON.stringify({ ...user, ...profile, ...form }));
+        window.dispatchEvent(new Event("storage"));
+      }
 
       closeModal();
     } catch (error) {
-      console.error(error);
+      console.error("Save Profile Error:", error);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -203,7 +225,7 @@ export default function UserInfoCard() {
         </div>
 
         <button
-          onClick={openModal}
+          onClick={handleOpenModal}
           className="flex w-full items-center justify-center gap-2 rounded-full border border-gray-300 bg-white px-4 py-3 text-sm font-medium text-gray-700 shadow-theme-xs hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 lg:inline-flex lg:w-auto"
         >
           Edit
@@ -328,6 +350,7 @@ export default function UserInfoCard() {
                 variant="outline"
                 size="sm"
                 onClick={closeModal}
+                disabled={saving}
               >
                 Close
               </Button>
@@ -335,8 +358,9 @@ export default function UserInfoCard() {
               <Button
                 type="submit"
                 size="sm"
+                disabled={saving}
               >
-                Save Changes
+                {saving ? "Saving..." : "Save Changes"}
               </Button>
 
             </div>
